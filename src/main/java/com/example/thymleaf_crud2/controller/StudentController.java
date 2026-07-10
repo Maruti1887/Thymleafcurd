@@ -20,6 +20,11 @@ import com.example.thymleaf_crud2.dto.Student;
 public class StudentController {
 	@Autowired 
 	StudentDao studentDao;
+
+	@GetMapping("/")
+    public String index() {
+        return "redirect:/home";
+    }
 	
 	@GetMapping("/home")
 	public String home() {
