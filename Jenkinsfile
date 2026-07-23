@@ -1,80 +1,63 @@
 pipeline {
     agent any
 
+    parameters {
+        choice(
+            name: 'ACTION',
+            choices: ['DEPLOY', 'REMOVE'],
+            description: 'Choose whether to deploy or remove containers'
+        )
+    }
+
     tools {
         maven 'maven'
     }
 
+    environment {
+        APP_NAME = "springboot-app"
+    }
+
     stages {
-
-        stage('Checkout') {
+        stage('Build JAR') {
+            when {
+                expression { params.ACTION == 'DEPLOY' }
+            }
             steps {
-                checkout scm
+                echo "Building Spring Boot JAR..."
+                sh 'mvn clean package'
             }
         }
 
-        stage('Build') {
-            steps {
-                sh 'mvn clean package -DskipTests'
+        stage('Deploy Application') {
+            when {
+                expression { params.ACTION == 'DEPLOY' }
             }
-            post {
-                success {
-                    echo 'Build Successful'
-                }
-                failure {
-                    echo 'Build Failed'
-                }
+            steps {
+                echo "Deploying Docker Containers..."
+                sh 'docker compose up --build -d'
             }
         }
 
-        stage('Run Spring Boot Application') {
-            steps {
-                sh '''
-                    echo "Stopping existing application if running..."
-
-                    sudo pkill -f "thymleaf_crud2-0.0.1-SNAPSHOT.jar" || true
-
-                    sleep 3
-
-                    echo "Available JAR files:"
-                    ls -lh target/*.jar
-
-                    echo "Starting Spring Boot application..."
-
-                    sudo nohup java -jar target/thymleaf_crud2-0.0.1-SNAPSHOT.jar > app.log 2>&1 &
-
-                    sleep 10
-
-                    echo "Application Started Successfully"
-                '''
+        stage('Remove Application') {
+            when {
+                expression { params.ACTION == 'REMOVE' }
             }
-        }
-
-        stage('Verify Application') {
             steps {
-                sh '''
-                    echo "Checking application status..."
-
-                    ps -ef | grep thymleaf_crud2 | grep -v grep || true
-
-                    curl http://localhost:8086 || true
-                '''
+                echo "Stopping and Removing Containers..."
+                sh 'docker compose down'
+                sh 'docker image prune -af'
             }
         }
     }
-
     post {
-
         success {
-            echo 'Pipeline executed successfully.'
+            echo "Pipeline executed successfully..."
         }
-
         failure {
-            echo 'Pipeline execution failed.'
+            echo "Pipeline execution failed..."
         }
-
         always {
-            archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+            echo "Pipeline completed..."
         }
     }
 }
